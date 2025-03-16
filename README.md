@@ -2,3 +2,5 @@
 
 **cryptocurrency-algorithmic-trading-with-python-and-binance-course
 #On Udemy**
+
+****NEED UPDATE****
