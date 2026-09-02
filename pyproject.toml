@@ -43,3 +43,5 @@ select = ["E", "F", "I", "UP", "B", "SIM", "N"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["backtest: needs nautilus_trader (uv sync --extra backtest)"]
+filterwarnings = ["ignore:Timestamp.utcnow is deprecated:DeprecationWarning", "ignore::DeprecationWarning:nautilus_trader"]

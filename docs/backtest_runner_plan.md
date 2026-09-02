@@ -1,4 +1,21 @@
-# Nautilus backtest runner: plan (awaiting approval before code)
+# Nautilus backtest runner: plan (option 1 approved and built)
+
+Status: built. Findings from running Nautilus 1.231 that changed the details below:
+
+- Nautilus fills a marketable limit **immediately at submission** against the last price
+  (the setup bar close), not on the next bar. The simulator now enters at the setup bar close
+  too, plus `slippage_pct`; the entry never expires, so the one-bar cancel in the bridge is a
+  live-path safety net only.
+- Stops fill exactly at the trigger; targets at the limit. Slippage on entries and stops is
+  therefore a simulator-only conservatism, and the parity check names it `slippage`.
+- Fill size is capped by bar volume (Nautilus's L1 book uses the synthetic tick size). Real
+  4h volume is orders of magnitude above our sizes; synthetic tests must use large volume.
+- With `OmsType.NETTING` one Position object is reopened per instrument and the closed history
+  is lost. The runner uses `OmsType.HEDGING` so each entry is its own Position.
+- Both-touch bars fill the target first on Nautilus's open-high-low-close replay. The
+  simulator takes the stop. Parity classifies this as `both_touch` and any trade one engine
+  took only because of an earlier divergence as `downstream`.
+
 
 Target: `core/backtest/`. Nautilus 1.231.0 (Python >=3.12). Installed via `uv sync --extra backtest`.
 
