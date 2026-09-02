@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Data archives (regenerate via scripts/backfill.py)
+data/
+*.parquet
+*.duckdb
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+.ipynb_checkpoints/
+.virtual_documents/

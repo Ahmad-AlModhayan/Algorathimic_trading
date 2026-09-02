@@ -1,0 +1,45 @@
+[project]
+name = "tradelab"
+version = "0.1.0"
+description = "Asset-agnostic trade framework and no-code strategy lab. Applies the user's rules; never sells an opinion."
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "apscheduler>=3.11.2",
+    "ccxt>=4.5.35",
+    "duckdb>=1.5.2",
+    "polars>=1.41.1",
+    "psycopg[binary]>=3.3.5",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+]
+
+[project.optional-dependencies]
+# Event-driven engine for backtest <-> paper <-> live parity. Installed once the runner plan is approved.
+backtest = ["nautilus_trader>=1.231.0"]
+# Research-only parameter sweeps. Results must be re-validated in Nautilus before a strategy is enabled.
+research = ["vectorbt>=1.1.0"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["core", "lab", "content"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "N"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
