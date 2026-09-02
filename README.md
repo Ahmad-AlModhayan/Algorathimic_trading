@@ -30,6 +30,26 @@ uv run python scripts/backfill.py                      # second run must print i
 Candles land in `$DATA_DIR/candles/binance/BTC-USDT/4h.parquet`. Only closed bars are stored.
 Postgres schema is in `sql/`; apply with `core.db.apply_schema(core.db.connect())`.
 
+## Backtest: walk-forward, acceptance, parity
+
+```bash
+uv run python scripts/run_backtest.py                  # breakout(N) on BTC/USDT 4h from the archive
+uv run python scripts/run_backtest.py --no-parity      # simulator only
+```
+
+Two engines, one `Trade` record, one metrics path:
+
+- `core/backtest/simulator.py` is the reference. It applies the acceptance rules exactly:
+  entry at the setup bar close plus slippage, stop/target on the touching bar, worst case when
+  both touch, fees both sides.
+- `core/backtest/nautilus_runner.py` runs the same `Strategy` through NautilusTrader with the
+  same bracket order paper/live will use. `core/backtest/parity.py` diffs the two and names
+  every difference (`both_touch`, `slippage`, `downstream`); anything `unexplained` fails.
+
+A strategy is `enabled` only when `core/backtest/acceptance.py` passes on combined
+out-of-sample folds (`walkforward.py`: train 6 months, test 2 months, rolling), on at least
+three instruments, and across one bull and one bear window.
+
 ## Layout
 
 ```
