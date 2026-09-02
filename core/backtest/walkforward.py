@@ -120,9 +120,7 @@ def walk_forward(
 ) -> WalkForwardResult:
     if folds is None:
         folds = make_folds(candles["ts"].min(), candles["ts"].max(), train_months, test_months)
-    combos = grid(param_grid)
-    if not combos:
-        raise ValueError("empty parameter grid")
+    combos = grid(param_grid) or [{}]  # empty grid = fixed parameters (a user rule)
     name = factory(instrument, **combos[0]).name
     result = WalkForwardResult(strategy=name, instrument=instrument)
 

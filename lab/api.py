@@ -18,8 +18,16 @@ from pydantic import BaseModel, Field
 
 from content.models import Insight, JobRun, Post, PostStatus, Preorder, TemplateScore, now_utc
 from content.store import ContentStore, JsonFileStore, PostgresStore, count_paid_preorders
+from content.strategy_list import INSTRUMENTS
+from core.backtest.acceptance import Criterion, evaluate_instrument
+from core.backtest.metrics import Metrics
+from core.backtest.walkforward import walk_forward
 from core.config import get_settings
+from core.data.store import ParquetCandleStore
 from core.language import LanguageViolationError, lint_language
+from core.models import Instrument
+from core.strategies.dsl import Rule, compile_rule
+from core.strategies.library import LIBRARY
 from lab.payments import EVENT_HEADER, SIGNATURE_HEADER, parse_lemonsqueezy, verify_lemonsqueezy
 
 app = FastAPI(title="tradelab lab API", version="0.2.0")
@@ -43,6 +51,13 @@ def _default_store() -> ContentStore:
 
 def get_store() -> ContentStore:
     return _default_store()
+
+
+def get_candle_store() -> ParquetCandleStore:
+    return ParquetCandleStore(get_settings().candles_dir)
+
+
+Candles = Annotated[ParquetCandleStore, Depends(get_candle_store)]
 
 
 def _admin_token() -> str | None:
@@ -275,3 +290,84 @@ def jobs(store: Store, limit: int = 30) -> list[JobRun]:
 @app.get("/api/templates/scores", response_model=list[TemplateScore], dependencies=[Admin])
 def template_scores(store: Store) -> list[TemplateScore]:
     return store.list_template_scores()
+
+
+# ---- lab (the no-code builder calls these) --------------------------------------------------
+
+
+class BacktestRequest(BaseModel):
+    rule: Rule
+    venue: str = "binance"
+    symbol: str = "BTC/USDT"
+
+
+class FoldSummary(BaseModel):
+    test_start: datetime
+    test_end: datetime
+    n_trades: int
+    expectancy_r: float
+    total_r: float
+
+
+class BacktestResponse(BaseModel):
+    rule_text: str
+    rule_text_ar: str
+    instrument: str
+    timeframe: str
+    bars: int
+    folds: list[FoldSummary]
+    oos: Metrics
+    criteria: list[Criterion]
+    meets_criteria: bool  # on this instrument only; enabling needs 3 instruments + regimes
+
+
+def _instrument(venue: str, symbol: str) -> Instrument:
+    for inst in INSTRUMENTS:
+        if inst.venue == venue and inst.symbol == symbol:
+            return inst
+    raise HTTPException(404, f"unknown instrument {venue}:{symbol}")
+
+
+@app.get("/api/lab/library", dependencies=[Admin])
+def lab_library() -> dict[str, dict]:
+    return {
+        name: {"rule": r.model_dump(), "text": r.to_text(), "text_ar": r.to_arabic()}
+        for name, r in LIBRARY.items()
+    }
+
+
+@app.post("/api/lab/backtest", response_model=BacktestResponse, dependencies=[Admin])
+def lab_backtest(body: BacktestRequest, candles: Candles) -> BacktestResponse:
+    """Walk-forward the user's rule with fixed parameters on the archive. Honest numbers,
+    no parameter search: the user chose the parameters."""
+    inst = _instrument(body.venue, body.symbol)
+    df = candles.read(inst.venue, inst.symbol, body.rule.timeframe)
+    if df.height < body.rule.warmup + 10:
+        raise HTTPException(
+            409, f"not enough {body.rule.timeframe} candles for {inst.key}: {df.height}"
+        )
+    rule = body.rule
+    wf = walk_forward(df, inst, lambda instrument, **_: compile_rule(rule, instrument), {})
+    if not wf.folds:
+        raise HTTPException(409, "archive shorter than one train+test window (8 months)")
+    report = evaluate_instrument(wf)
+    return BacktestResponse(
+        rule_text=rule.to_text(),
+        rule_text_ar=lint_language(rule.to_arabic()),
+        instrument=inst.key,
+        timeframe=rule.timeframe,
+        bars=df.height,
+        folds=[
+            FoldSummary(
+                test_start=f.fold.test_start,
+                test_end=f.fold.test_end,
+                n_trades=f.test_metrics.n_trades,
+                expectancy_r=f.test_metrics.expectancy_r,
+                total_r=f.test_metrics.total_r,
+            )
+            for f in wf.folds
+        ],
+        oos=wf.oos_metrics,
+        criteria=report.criteria,
+        meets_criteria=report.passed,
+    )
