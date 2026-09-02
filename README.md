@@ -50,6 +50,19 @@ A strategy is `enabled` only when `core/backtest/acceptance.py` passes on combin
 out-of-sample folds (`walkforward.py`: train 6 months, test 2 months, rolling), on at least
 three instruments, and across one bull and one bear window.
 
+## Content engine and dashboard v0
+
+```bash
+uv run python scripts/content_worker.py --once run_strategies   # walk-forward -> insights -> posts for review
+uv run uvicorn lab.api:app --port 8000                          # review queue API
+cd lab/dashboard && npm install && npm run dev                  # Arabic RTL dashboard on :3000
+uv run python scripts/content_worker.py                         # scheduler: 03:00 ingest, 04:00 run, publish every 15 min
+```
+
+Nothing is posted without a human approving it in the review queue. Without X credentials in
+`.env` the publisher is a dry run. Every post text passes `lint_language()` at composition,
+again on edit, and once more at the publisher's door.
+
 ## Layout
 
 ```

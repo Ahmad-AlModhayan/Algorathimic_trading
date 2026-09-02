@@ -50,6 +50,7 @@ class WalkForwardResult:
     strategy: str
     instrument: Instrument
     folds: list[FoldResult] = field(default_factory=list)
+    rule_text: str = ""  # rule of the most recent fold's chosen parameters
 
     @property
     def oos_trades(self) -> list[Trade]:
@@ -145,6 +146,7 @@ def walk_forward(
                 )
             )
         strat = factory(instrument, **best_params)
+        result.rule_text = getattr(strat, "rule_text", "") or name
         test_trades = simulate(candles, strat, instrument, fold.test_start, fold.test_end)
         result.folds.append(
             FoldResult(fold, best_params, best_metrics, test_trades, compute(test_trades))

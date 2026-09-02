@@ -8,10 +8,13 @@ dependencies = [
     "apscheduler>=3.11.2",
     "ccxt>=4.5.35",
     "duckdb>=1.5.2",
+    "fastapi>=0.141.1",
+    "httpx>=0.28.1",
     "polars>=1.41.1",
     "psycopg[binary]>=3.3.5",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
+    "uvicorn>=0.52.4",
 ]
 
 [project.optional-dependencies]
@@ -44,4 +47,4 @@ select = ["E", "F", "I", "UP", "B", "SIM", "N"]
 testpaths = ["tests"]
 addopts = "-q"
 markers = ["backtest: needs nautilus_trader (uv sync --extra backtest)"]
-filterwarnings = ["ignore:Timestamp.utcnow is deprecated:DeprecationWarning", "ignore::DeprecationWarning:nautilus_trader"]
+filterwarnings = ["ignore:Timestamp.utcnow is deprecated:DeprecationWarning", "ignore::DeprecationWarning:nautilus_trader", "ignore:Using `httpx` with `starlette.testclient`"]

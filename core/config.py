@@ -24,6 +24,22 @@ class Settings(BaseSettings):
     binance_api_key: str | None = None
     binance_api_secret: str | None = None
 
+    # Content engine
+    timezone: str = "Asia/Riyadh"
+    content_store: str = Field(
+        default="json", description="'json' (DATA_DIR/content/state.json) or 'postgres'"
+    )
+    preorder_target: int = 20
+    x_consumer_key: str | None = None
+    x_consumer_secret: str | None = None
+    x_access_token: str | None = None
+    x_access_secret: str | None = None
+    x_bearer_token: str | None = None
+
+    @property
+    def content_state_path(self) -> Path:
+        return self.data_dir / "content" / "state.json"
+
     @property
     def candles_dir(self) -> Path:
         return self.data_dir / "candles"

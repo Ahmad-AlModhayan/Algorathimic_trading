@@ -42,7 +42,7 @@ def test_walk_forward_selects_on_train_and_reports_oos():
     res = walk_forward(
         candles, CLEAN, Breakout, {"n": [3, 5], "atr_n": [3], "target_r": [1.0, 2.0]}
     )
-    assert res.strategy == "breakout"
+    assert res.strategy == "breakout" and "high(" in res.rule_text
     assert len(res.folds) == 4  # Jan 2024 .. ~Mar 2025 -> 4 complete folds
     for f in res.folds:
         assert f.params in grid({"n": [3, 5], "atr_n": [3], "target_r": [1.0, 2.0]})

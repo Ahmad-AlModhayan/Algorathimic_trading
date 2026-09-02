@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Segoe UI", Tahoma, "Noto Naskh Arabic", "Noto Sans Arabic", system-ui, sans-serif;
+}
+
+.post-preview {
+  white-space: pre-wrap;
+  line-height: 1.8;
+}
