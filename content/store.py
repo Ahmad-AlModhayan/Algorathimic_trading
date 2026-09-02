@@ -13,6 +13,7 @@ from typing import Any, Protocol
 from content.models import (
     Insight,
     JobRun,
+    License,
     Post,
     PostMetrics,
     PostStatus,
@@ -41,6 +42,9 @@ class ContentStore(Protocol):
     def upsert_preorder(self, preorder: Preorder) -> None: ...
     def get_preorder(self, preorder_id: str) -> Preorder | None: ...
     def list_preorders(self) -> list[Preorder]: ...
+    def upsert_license(self, lic: License) -> None: ...
+    def get_license(self, key: str) -> License | None: ...
+    def list_licenses(self) -> list[License]: ...
 
 
 class JsonFileStore:
@@ -65,7 +69,7 @@ class JsonFileStore:
     def _load(self) -> None:
         if self.path.exists():
             self._d.update(json.loads(self.path.read_text(encoding="utf-8")))
-        for key in ("insights", "posts", "job_runs", "counters", "preorders"):
+        for key in ("insights", "posts", "job_runs", "counters", "preorders", "licenses"):
             self._d.setdefault(key, {})
         for key in ("metrics", "template_scores"):
             self._d.setdefault(key, [])
@@ -183,6 +187,24 @@ class JsonFileStore:
         return sorted(
             (Preorder.model_validate(r) for r in self._d["preorders"].values()),
             key=lambda p: p.created_at,
+        )
+
+    def upsert_license(self, lic: License) -> None:
+        with self._lock:
+            self._load()
+            self._d["licenses"][lic.key] = lic.model_dump(mode="json")
+            self._save()
+
+    def get_license(self, key: str) -> License | None:
+        self._load()
+        raw = self._d["licenses"].get(key)
+        return License.model_validate(raw) if raw else None
+
+    def list_licenses(self) -> list[License]:
+        self._load()
+        return sorted(
+            (License.model_validate(r) for r in self._d["licenses"].values()),
+            key=lambda x: x.created_at,
         )
 
 
@@ -318,6 +340,21 @@ class PostgresStore:
     def list_preorders(self) -> list[Preorder]:
         rows = self._exec("SELECT doc FROM preorders ORDER BY created_at")
         return [Preorder.model_validate_json(r[0]) for r in rows]
+
+    def upsert_license(self, lic: License) -> None:
+        self._exec(
+            "INSERT INTO licenses (key, status, created_at, doc) VALUES (%s,%s,%s,%s) "
+            "ON CONFLICT (key) DO UPDATE SET status=EXCLUDED.status, doc=EXCLUDED.doc",
+            (lic.key, lic.status, lic.created_at, lic.model_dump_json()),
+        )
+
+    def get_license(self, key: str) -> License | None:
+        rows = self._exec("SELECT doc FROM licenses WHERE key=%s", (key,))
+        return License.model_validate_json(rows[0][0]) if rows else None
+
+    def list_licenses(self) -> list[License]:
+        rows = self._exec("SELECT doc FROM licenses ORDER BY created_at")
+        return [License.model_validate_json(r[0]) for r in rows]
 
 
 def parse_dt(value: str | datetime | None) -> datetime | None:

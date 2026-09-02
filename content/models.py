@@ -107,3 +107,19 @@ class Preorder(BaseModel):
     @property
     def counts(self) -> bool:
         return self.status == "paid" and not self.test_mode
+
+
+class License(BaseModel):
+    """A license key issued by the merchant of record for a paid order."""
+
+    key: str
+    order_id: str | None = None
+    email: str = ""
+    status: Literal["active", "inactive", "disabled", "expired"] = "active"
+    provider: Literal["lemonsqueezy", "manual"] = "lemonsqueezy"
+    created_at: datetime = Field(default_factory=now_utc)
+    updated_at: datetime = Field(default_factory=now_utc)
+
+    @property
+    def valid(self) -> bool:
+        return self.status == "active"

@@ -16,7 +16,16 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from content.models import Insight, JobRun, Post, PostStatus, Preorder, TemplateScore, now_utc
+from content.models import (
+    Insight,
+    JobRun,
+    License,
+    Post,
+    PostStatus,
+    Preorder,
+    TemplateScore,
+    now_utc,
+)
 from content.store import ContentStore, JsonFileStore, PostgresStore, count_paid_preorders
 from content.strategy_list import INSTRUMENTS
 from core.backtest.acceptance import Criterion, evaluate_instrument
@@ -28,7 +37,13 @@ from core.language import LanguageViolationError, lint_language
 from core.models import Instrument
 from core.strategies.dsl import Rule, compile_rule
 from core.strategies.library import LIBRARY
-from lab.payments import EVENT_HEADER, SIGNATURE_HEADER, parse_lemonsqueezy, verify_lemonsqueezy
+from lab.payments import (
+    EVENT_HEADER,
+    SIGNATURE_HEADER,
+    parse_lemonsqueezy,
+    parse_lemonsqueezy_license,
+    verify_lemonsqueezy,
+)
 
 app = FastAPI(title="tradelab lab API", version="0.2.0")
 app.add_middleware(
@@ -164,6 +179,13 @@ async def lemonsqueezy_webhook(request: Request, store: Store) -> dict:
         payload = await request.json()
     except ValueError as e:
         raise HTTPException(400, "invalid JSON") from e
+    lic = parse_lemonsqueezy_license(payload)
+    if lic is not None:
+        existing = store.get_license(lic.key)
+        if existing is not None:
+            lic = lic.model_copy(update={"created_at": existing.created_at})
+        store.upsert_license(lic)
+        return {"license": lic.key[-4:], "status": lic.status}
     preorder = parse_lemonsqueezy(payload)
     if preorder is None:
         return {
@@ -274,6 +296,11 @@ def preorders(store: Store) -> list[Preorder]:
     return store.list_preorders()
 
 
+@app.get("/api/licenses", response_model=list[License], dependencies=[Admin])
+def licenses(store: Store) -> list[License]:
+    return store.list_licenses()
+
+
 @app.put("/api/counters/{name}", dependencies=[Admin])
 def set_counter(name: str, body: CounterBody, store: Store) -> dict:
     if name not in ("preorders_manual", "landing_clicks"):
@@ -371,3 +398,24 @@ def lab_backtest(body: BacktestRequest, candles: Candles) -> BacktestResponse:
         criteria=report.criteria,
         meets_criteria=report.passed,
     )
+
+
+class ActivateBody(BaseModel):
+    key: str = Field(min_length=8, max_length=128)
+
+
+class ActivateResponse(BaseModel):
+    valid: bool
+    status: str
+    email_hint: str  # masked; the UI shows it so the buyer recognizes the account
+
+
+@app.post("/api/lab/activate", response_model=ActivateResponse)
+def activate(body: ActivateBody, store: Store) -> ActivateResponse:
+    """Local license check. Keys arrive through the webhook; nothing is looked up remotely."""
+    lic = store.get_license(body.key.strip())
+    if lic is None:
+        return ActivateResponse(valid=False, status="unknown", email_hint="")
+    name, _, domain = lic.email.partition("@")
+    hint = f"{name[:2]}***@{domain}" if domain else ""
+    return ActivateResponse(valid=lic.valid, status=lic.status, email_hint=hint)

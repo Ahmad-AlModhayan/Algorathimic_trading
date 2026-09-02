@@ -4,7 +4,8 @@ two functions so switching to Paddle is a matter of replacing them.
 UNVERIFIED AGAINST LIVE DOCS (network was blocked when written). Assumed contract:
 - header `X-Signature`: hex HMAC-SHA256 of the raw body, keyed by the webhook signing secret
 - header `X-Event-Name` duplicates `meta.event_name`
-- events of interest: `order_created` (status paid), `order_refunded`
+- events of interest: `order_created` (status paid), `order_refunded`,
+  `license_key_created` / `license_key_updated` (attributes.key, status, order_id, user_email)
 - payload: meta.event_name, data.id, data.attributes.{user_email,user_name,total,currency,
   status,refunded,test_mode}
 Confirm at docs.lemonsqueezy.com/help/webhooks before going live; a test-mode order through
@@ -17,7 +18,7 @@ import hashlib
 import hmac
 from typing import Any
 
-from content.models import Preorder, now_utc
+from content.models import License, Preorder, now_utc
 
 SIGNATURE_HEADER = "X-Signature"
 EVENT_HEADER = "X-Event-Name"
@@ -53,5 +54,30 @@ def parse_lemonsqueezy(payload: dict[str, Any]) -> Preorder | None:
         status="refunded" if refunded else "paid",
         test_mode=bool(attrs.get("test_mode", False)),
         last_event=event,
+        updated_at=now_utc(),
+    )
+
+
+_LICENSE_STATUS = {
+    "active": "active",
+    "inactive": "inactive",
+    "disabled": "disabled",
+    "expired": "expired",
+}
+
+
+def parse_lemonsqueezy_license(payload: dict[str, Any]) -> License | None:
+    event = (payload.get("meta") or {}).get("event_name", "")
+    if event not in ("license_key_created", "license_key_updated"):
+        return None
+    attrs = (payload.get("data") or {}).get("attributes") or {}
+    key = str(attrs.get("key") or "").strip()
+    if not key:
+        return None
+    return License(
+        key=key,
+        order_id=str(attrs["order_id"]) if attrs.get("order_id") is not None else None,
+        email=str(attrs.get("user_email") or ""),
+        status=_LICENSE_STATUS.get(str(attrs.get("status") or "active"), "inactive"),  # type: ignore[arg-type]
         updated_at=now_utc(),
     )

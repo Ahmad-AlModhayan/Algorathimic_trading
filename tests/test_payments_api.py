@@ -186,3 +186,52 @@ def test_public_results_only_published_newest_first(client, store):
     r = client.get("/api/public/results").json()
     assert [x["text"] for x in r][0] == "الأحدث" and len(r) == 2
     assert len(client.get("/api/public/results?limit=1").json()) == 1
+
+
+# ---- licenses ------------------------------------------------------------------------------
+
+
+def _license_event(
+    key="LS-KEY-0000-1111", event="license_key_created", status="active", order_id=1001
+):
+    return {
+        "meta": {"event_name": event},
+        "data": {
+            "type": "license-keys",
+            "id": "7",
+            "attributes": {
+                "key": key,
+                "status": status,
+                "order_id": order_id,
+                "user_email": "buyer@example.com",
+            },
+        },
+    }
+
+
+def test_license_lifecycle_and_activation(client, store):
+    def post(payload):
+        raw, headers = _signed(payload)
+        return client.post("/api/webhooks/lemonsqueezy", content=raw, headers=headers)
+
+    assert (
+        client.post("/api/lab/activate", json={"key": "LS-KEY-0000-1111"}).json()["valid"] is False
+    )
+    assert post(_license_event()).json() == {"license": "1111", "status": "active"}
+    r = client.post("/api/lab/activate", json={"key": "LS-KEY-0000-1111"}).json()
+    assert r["valid"] is True and r["email_hint"] == "bu***@example.com"
+    assert (
+        post(_license_event(event="license_key_updated", status="disabled")).json()["status"]
+        == "disabled"
+    )
+    assert (
+        client.post("/api/lab/activate", json={"key": "LS-KEY-0000-1111"}).json()["valid"] is False
+    )
+    assert (
+        post(_license_event(event="license_key_updated", status="weird")).json()["status"]
+        == "inactive"
+    )
+    listed = client.get("/api/licenses", headers=AUTH).json()
+    assert len(listed) == 1 and listed[0]["order_id"] == "1001"
+    assert client.get("/api/licenses").status_code == 401
+    assert client.post("/api/lab/activate", json={"key": "short"}).status_code == 422

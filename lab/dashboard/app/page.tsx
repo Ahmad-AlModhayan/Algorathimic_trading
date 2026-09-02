@@ -133,9 +133,14 @@ export default async function Landing() {
         <p>{copy.footer.disclaimer}</p>
         <div className="flex items-center justify-between">
           <span>{BRAND}</span>
-          <Link href="/admin" className="hover:underline">
-            {copy.footer.admin}
-          </Link>
+          <span className="flex gap-4">
+            <Link href="/lab" className="hover:underline">
+              المختبر
+            </Link>
+            <Link href="/admin" className="hover:underline">
+              {copy.footer.admin}
+            </Link>
+          </span>
         </div>
       </footer>
     </main>
