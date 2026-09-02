@@ -10,7 +10,7 @@ from content.strategy_list import StrategyEntry
 from content.templates import compose_post
 from core.data.store import ParquetCandleStore
 from core.strategies.breakout import Breakout
-from lab.api import app, get_store
+from lab.api import app, get_store, require_admin
 from tests.backtest_helpers import bars
 from tests.conftest import FakeAdapter, make_rows
 from tests.content_helpers import BTC, sample_insight
@@ -24,6 +24,7 @@ def store(tmp_path):
 @pytest.fixture
 def client(store):
     app.dependency_overrides[get_store] = lambda: store
+    app.dependency_overrides[require_admin] = lambda: None
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -112,7 +113,7 @@ def test_api_review_approve_reject_flow(client, store):
 
 
 def test_api_funnel_counters_and_jobs(client, store):
-    assert client.put("/api/counters/preorders", json={"value": 7}).status_code == 200
+    assert client.put("/api/counters/preorders_manual", json={"value": 7}).status_code == 200
     assert client.put("/api/counters/bogus", json={"value": 1}).status_code == 404
     jobs.run_job(store, "publish", lambda: "published=0 failed=0")
     f = client.get("/api/funnel").json()

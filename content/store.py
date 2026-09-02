@@ -10,7 +10,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from content.models import Insight, JobRun, Post, PostMetrics, PostStatus, TemplateScore
+from content.models import (
+    Insight,
+    JobRun,
+    Post,
+    PostMetrics,
+    PostStatus,
+    Preorder,
+    TemplateScore,
+)
 
 
 class ContentStore(Protocol):
@@ -29,6 +37,10 @@ class ContentStore(Protocol):
     def list_job_runs(self, limit: int = 50) -> list[JobRun]: ...
     def get_counter(self, name: str) -> int: ...
     def set_counter(self, name: str, value: int) -> None: ...
+    def increment_counter(self, name: str, by: int = 1) -> int: ...
+    def upsert_preorder(self, preorder: Preorder) -> None: ...
+    def get_preorder(self, preorder_id: str) -> Preorder | None: ...
+    def list_preorders(self) -> list[Preorder]: ...
 
 
 class JsonFileStore:
@@ -46,12 +58,17 @@ class JsonFileStore:
             "template_scores": [],
             "job_runs": {},
             "counters": {},
+            "preorders": {},
         }
         self._load()
 
     def _load(self) -> None:
         if self.path.exists():
             self._d.update(json.loads(self.path.read_text(encoding="utf-8")))
+        for key in ("insights", "posts", "job_runs", "counters", "preorders"):
+            self._d.setdefault(key, {})
+        for key in ("metrics", "template_scores"):
+            self._d.setdefault(key, [])
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -141,6 +158,32 @@ class JsonFileStore:
             self._load()
             self._d["counters"][name] = int(value)
             self._save()
+
+    def increment_counter(self, name: str, by: int = 1) -> int:
+        with self._lock:
+            self._load()
+            value = int(self._d["counters"].get(name, 0)) + by
+            self._d["counters"][name] = value
+            self._save()
+            return value
+
+    def upsert_preorder(self, preorder: Preorder) -> None:
+        with self._lock:
+            self._load()
+            self._d["preorders"][preorder.id] = preorder.model_dump(mode="json")
+            self._save()
+
+    def get_preorder(self, preorder_id: str) -> Preorder | None:
+        self._load()
+        raw = self._d["preorders"].get(preorder_id)
+        return Preorder.model_validate(raw) if raw else None
+
+    def list_preorders(self) -> list[Preorder]:
+        self._load()
+        return sorted(
+            (Preorder.model_validate(r) for r in self._d["preorders"].values()),
+            key=lambda p: p.created_at,
+        )
 
 
 class PostgresStore:
@@ -244,8 +287,44 @@ class PostgresStore:
             (name, value),
         )
 
+    def increment_counter(self, name: str, by: int = 1) -> int:
+        rows = self._exec(
+            "INSERT INTO content_counters (name, value) VALUES (%s,%s) "
+            "ON CONFLICT (name) DO UPDATE SET value = content_counters.value + EXCLUDED.value "
+            "RETURNING value",
+            (name, by),
+        )
+        return int(rows[0][0])
+
+    def upsert_preorder(self, preorder: Preorder) -> None:
+        self._exec(
+            "INSERT INTO preorders (id, provider, status, test_mode, created_at, doc) "
+            "VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (id) DO UPDATE SET "
+            "status=EXCLUDED.status, test_mode=EXCLUDED.test_mode, doc=EXCLUDED.doc",
+            (
+                preorder.id,
+                preorder.provider,
+                preorder.status,
+                preorder.test_mode,
+                preorder.created_at,
+                preorder.model_dump_json(),
+            ),
+        )
+
+    def get_preorder(self, preorder_id: str) -> Preorder | None:
+        rows = self._exec("SELECT doc FROM preorders WHERE id=%s", (preorder_id,))
+        return Preorder.model_validate_json(rows[0][0]) if rows else None
+
+    def list_preorders(self) -> list[Preorder]:
+        rows = self._exec("SELECT doc FROM preorders ORDER BY created_at")
+        return [Preorder.model_validate_json(r[0]) for r in rows]
+
 
 def parse_dt(value: str | datetime | None) -> datetime | None:
     if value is None or isinstance(value, datetime):
         return value
     return datetime.fromisoformat(value)
+
+
+def count_paid_preorders(store: ContentStore) -> int:
+    return sum(p.counts for p in store.list_preorders())

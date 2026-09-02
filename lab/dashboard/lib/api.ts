@@ -1,4 +1,5 @@
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const TOKEN_KEY = "lab_admin_token";
 
 export type PostStatus = "pending_review" | "approved" | "rejected" | "published" | "failed";
 
@@ -38,6 +39,7 @@ export interface Funnel {
   engagements: number;
   link_clicks: number;
   preorders: number;
+  preorders_manual: number;
   preorder_target: number;
   posts_published: number;
   posts_pending: number;
@@ -52,18 +54,48 @@ export interface JobRun {
   detail: string;
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(`${API}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    cache: "no-store",
-  });
+export interface PublicResult {
+  text: string;
+  published_at: string | null;
+}
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export function getToken(): string | null {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token: string | null) {
+  try {
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch {}
+}
+
+async function req<T>(path: string, init?: RequestInit, auth = true): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (auth) {
+    const t = getToken();
+    if (t) headers.Authorization = `Bearer ${t}`;
+  }
+  const r = await fetch(`${API}${path}`, { ...init, headers: { ...headers, ...(init?.headers ?? {}) }, cache: "no-store" });
   if (!r.ok) {
     let detail = r.statusText;
     try {
       detail = (await r.json()).detail ?? detail;
     } catch {}
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    throw new ApiError(r.status, typeof detail === "string" ? detail : JSON.stringify(detail));
   }
   return r.json();
 }
@@ -77,6 +109,9 @@ export const api = {
     req<Post>(`/api/posts/${id}/approve`, { method: "POST", body: JSON.stringify(body) }),
   reject: (id: string, note: string) =>
     req<Post>(`/api/posts/${id}/reject`, { method: "POST", body: JSON.stringify({ note }) }),
-  setCounter: (name: "preorders" | "landing_clicks", value: number) =>
+  setCounter: (name: "preorders_manual" | "landing_clicks", value: number) =>
     req(`/api/counters/${name}`, { method: "PUT", body: JSON.stringify({ value }) }),
+  publicResults: (limit = 3) => req<PublicResult[]>(`/api/public/results?limit=${limit}`, undefined, false),
+  landingEvent: (ref: string | null) =>
+    req(`/api/public/landing`, { method: "POST", body: JSON.stringify({ ref }) }, false),
 };

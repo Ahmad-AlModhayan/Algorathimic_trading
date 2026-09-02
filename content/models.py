@@ -83,3 +83,27 @@ class JobRun(BaseModel):
     finished_at: datetime | None = None
     ok: bool | None = None
     detail: str = ""
+
+
+PreorderStatus = Literal["paid", "refunded"]
+
+
+class Preorder(BaseModel):
+    """One paid preorder from the merchant of record. Counted toward the gate of 20 only when
+    status is paid and it is not a test-mode order."""
+
+    id: str  # provider order id
+    provider: Literal["lemonsqueezy", "manual"]
+    email: str
+    name: str | None = None
+    amount_cents: int = 0
+    currency: str = "USD"
+    status: PreorderStatus = "paid"
+    test_mode: bool = False
+    created_at: datetime = Field(default_factory=now_utc)
+    updated_at: datetime = Field(default_factory=now_utc)
+    last_event: str = ""
+
+    @property
+    def counts(self) -> bool:
+        return self.status == "paid" and not self.test_mode

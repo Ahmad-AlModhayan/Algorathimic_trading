@@ -63,6 +63,13 @@ Nothing is posted without a human approving it in the review queue. Without X cr
 `.env` the publisher is a dry run. Every post text passes `lint_language()` at composition,
 again on edit, and once more at the publisher's door.
 
+## Landing page and preorders
+
+`lab/dashboard` serves the public landing page at `/` and the dashboard at `/admin`.
+Preorders arrive through the Lemon Squeezy webhook (`/api/webhooks/lemonsqueezy`), are stored
+idempotently, and count toward the gate of 20 only when paid and not in test mode.
+See `docs/preorder_flow.md`. The admin API needs `LAB_ADMIN_TOKEN`.
+
 ## Layout
 
 ```

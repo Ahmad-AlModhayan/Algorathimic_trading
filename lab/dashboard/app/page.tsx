@@ -1,287 +1,143 @@
-"use client";
+import Link from "next/link";
+import LandingPing from "@/components/LandingPing";
+import copy from "@/content/landing.ar.json";
+import { API, type PublicResult } from "@/lib/api";
 
-import { useCallback, useEffect, useState } from "react";
-import { api, type Funnel, type JobRun, type Post, type ReviewItem } from "@/lib/api";
+const CHECKOUT = process.env.NEXT_PUBLIC_CHECKOUT_URL ?? "";
+const PRICE = process.env.NEXT_PUBLIC_PREORDER_PRICE ?? "";
+const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME ?? "مختبر الاستراتيجيات";
 
-const STATUS_AR: Record<Post["status"], string> = {
-  pending_review: "بانتظار المراجعة",
-  approved: "معتمد",
-  rejected: "مرفوض",
-  published: "منشور",
-  failed: "فشل",
-};
+export const dynamic = "force-dynamic";
 
-function fmt(dt: string | null | undefined) {
-  if (!dt) return "—";
-  return new Date(dt).toLocaleString("ar-SA", { dateStyle: "medium", timeStyle: "short" });
+async function latestResults(): Promise<PublicResult[]> {
+  try {
+    const r = await fetch(`${API}/api/public/results?limit=3`, { cache: "no-store" });
+    if (!r.ok) return [];
+    return (await r.json()) as PublicResult[];
+  } catch {
+    return [];
+  }
 }
 
-function toLocalInput(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-export default function Dashboard() {
-  const [review, setReview] = useState<ReviewItem[]>([]);
-  const [calendar, setCalendar] = useState<Record<string, Post[]>>({});
-  const [funnel, setFunnel] = useState<Funnel | null>(null);
-  const [jobs, setJobs] = useState<JobRun[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const [r, c, f, j] = await Promise.all([api.review(), api.calendar(), api.funnel(), api.jobs()]);
-      setReview(r);
-      setCalendar(c);
-      setFunnel(f);
-      setJobs(j);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, []);
-
-  useEffect(() => {
-    const first = setTimeout(load, 0);
-    const t = setInterval(load, 30_000);
-    return () => {
-      clearTimeout(first);
-      clearInterval(t);
-    };
-  }, [load]);
-
+function Cta({ label }: { label: string }) {
+  if (!CHECKOUT) {
+    return <span className="inline-block rounded-md bg-zinc-200 px-5 py-3 text-zinc-600">{copy.preorder.unavailable}</span>;
+  }
   return (
-    <main className="mx-auto max-w-6xl space-y-10 p-6">
-      <header className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">لوحة المحتوى</h1>
-        <span className="text-sm text-zinc-500">لا يُنشر شيء بدون اعتماد يدوي</span>
-      </header>
-      {error && (
-        <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-          تعذر الاتصال بالواجهة الخلفية: {error}
-        </div>
-      )}
+    <a
+      href={CHECKOUT}
+      className="inline-block rounded-md bg-emerald-600 px-5 py-3 font-semibold text-white hover:bg-emerald-700"
+    >
+      {label}
+    </a>
+  );
+}
 
-      <FunnelSection funnel={funnel} onChange={load} />
-      <ReviewSection items={review} onChange={load} />
-      <CalendarSection calendar={calendar} />
-      <JobsSection jobs={jobs} />
+export default async function Landing() {
+  const results = await latestResults();
+  return (
+    <main className="mx-auto max-w-4xl space-y-20 px-6 py-12">
+      <LandingPing />
+
+      <section className="space-y-5">
+        <div className="text-sm font-semibold text-emerald-700">{copy.hero.eyebrow}</div>
+        <h1 className="text-3xl font-bold leading-snug md:text-4xl">{copy.hero.title}</h1>
+        <p className="max-w-2xl text-lg leading-relaxed text-zinc-600">{copy.hero.subtitle}</p>
+        <div className="flex flex-wrap items-center gap-4">
+          <Cta label={copy.hero.cta} />
+          {PRICE && <span className="text-lg font-semibold tabular-nums">{PRICE}</span>}
+        </div>
+        <p className="text-xs text-zinc-500">{copy.hero.cta_note}</p>
+      </section>
+
+      <section>
+        <h2 className="mb-6 text-2xl font-bold">{copy.how.title}</h2>
+        <ol className="grid gap-4 md:grid-cols-3">
+          {copy.how.steps.map((s) => (
+            <li key={s.n} className="rounded-lg border border-zinc-200 bg-white p-5">
+              <div className="mb-2 text-2xl font-bold text-emerald-700">{s.n}</div>
+              <div className="mb-1 font-semibold">{s.title}</div>
+              <p className="text-sm leading-relaxed text-zinc-600">{s.text}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section>
+        <h2 className="mb-6 text-2xl font-bold">{copy.what.title}</h2>
+        <ul className="grid gap-3 md:grid-cols-2">
+          {copy.what.items.map((item) => (
+            <li key={item} className="flex gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm leading-relaxed">
+              <span className="text-emerald-700">✓</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-2xl font-bold">{copy.results.title}</h2>
+        <p className="mb-6 text-zinc-600">{copy.results.subtitle}</p>
+        <div className="grid gap-4 md:grid-cols-3">
+          {results.length === 0 && (
+            <figure className="rounded-lg border border-zinc-200 bg-white p-4 md:col-span-1">
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-7">{copy.results.example}</pre>
+              <figcaption className="mt-2 text-xs text-zinc-400">{copy.results.example_label}</figcaption>
+            </figure>
+          )}
+          {results.map((r, i) => (
+            <figure key={i} className="rounded-lg border border-zinc-200 bg-white p-4">
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-7">{r.text}</pre>
+              {r.published_at && (
+                <figcaption className="mt-2 text-xs text-zinc-400 tabular-nums">
+                  {new Date(r.published_at).toLocaleDateString("ar-SA")}
+                </figcaption>
+              )}
+            </figure>
+          ))}
+        </div>
+        {results.length === 0 && <p className="mt-3 text-sm text-zinc-500">{copy.results.empty}</p>}
+      </section>
+
+      <section id="preorder" className="rounded-xl border border-emerald-200 bg-emerald-50 p-8">
+        <h2 className="mb-2 text-2xl font-bold">{copy.preorder.title}</h2>
+        <div className="mb-4 flex items-baseline gap-3">
+          {PRICE && <span className="text-3xl font-bold tabular-nums">{PRICE}</span>}
+          <span className="text-sm text-zinc-600">{copy.preorder.price_label}</span>
+        </div>
+        <ul className="mb-6 space-y-2 text-sm">
+          {copy.preorder.includes.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="text-emerald-700">•</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+        <Cta label={copy.preorder.cta} />
+        <p className="mt-4 text-xs text-zinc-600">{copy.preorder.counter_label}</p>
+      </section>
+
+      <section>
+        <h2 className="mb-6 text-2xl font-bold">{copy.faq.title}</h2>
+        <div className="space-y-3">
+          {copy.faq.items.map((f) => (
+            <details key={f.q} className="rounded-lg border border-zinc-200 bg-white p-4">
+              <summary className="cursor-pointer font-semibold">{f.q}</summary>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-600">{f.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      <footer className="space-y-3 border-t border-zinc-200 pt-6 text-xs text-zinc-500">
+        <p>{copy.footer.disclaimer}</p>
+        <div className="flex items-center justify-between">
+          <span>{BRAND}</span>
+          <Link href="/admin" className="hover:underline">
+            {copy.footer.admin}
+          </Link>
+        </div>
+      </footer>
     </main>
-  );
-}
-
-function Tile({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
-  return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4">
-      <div className="text-sm text-zinc-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
-      {sub && <div className="mt-1 text-xs text-zinc-400">{sub}</div>}
-    </div>
-  );
-}
-
-function FunnelSection({ funnel, onChange }: { funnel: Funnel | null; onChange: () => void }) {
-  const [preorders, setPreorders] = useState<string>("");
-  if (!funnel) return null;
-  const pct = Math.min(100, Math.round((100 * funnel.preorders) / Math.max(1, funnel.preorder_target)));
-  return (
-    <section>
-      <h2 className="mb-3 text-lg font-semibold">القمع</h2>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Tile label="منشورات" value={funnel.posts_published} sub={`${funnel.posts_pending} بانتظار المراجعة`} />
-        <Tile label="مشاهدات" value={funnel.impressions.toLocaleString("ar-SA")} />
-        <Tile label="تفاعلات" value={funnel.engagements.toLocaleString("ar-SA")} />
-        <Tile label="نقرات الصفحة" value={funnel.link_clicks.toLocaleString("ar-SA")} />
-        <div className="rounded-lg border border-zinc-200 bg-white p-4">
-          <div className="text-sm text-zinc-500">الطلبات المسبقة</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums">
-            {funnel.preorders} / {funnel.preorder_target}
-          </div>
-          <div className="mt-2 h-2 w-full rounded bg-zinc-100">
-            <div className="h-2 rounded bg-emerald-500" style={{ width: `${pct}%` }} />
-          </div>
-          <form
-            className="mt-2 flex gap-1"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const v = parseInt(preorders, 10);
-              if (Number.isNaN(v)) return;
-              await api.setCounter("preorders", v);
-              setPreorders("");
-              onChange();
-            }}
-          >
-            <input
-              className="w-16 rounded border border-zinc-300 px-1 text-sm"
-              inputMode="numeric"
-              placeholder="تحديث"
-              value={preorders}
-              onChange={(e) => setPreorders(e.target.value)}
-            />
-            <button className="rounded bg-zinc-800 px-2 text-xs text-white">حفظ</button>
-          </form>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ReviewSection({ items, onChange }: { items: ReviewItem[]; onChange: () => void }) {
-  return (
-    <section>
-      <h2 className="mb-3 text-lg font-semibold">قائمة المراجعة ({items.length})</h2>
-      {items.length === 0 && <p className="text-sm text-zinc-500">لا منشورات بانتظار المراجعة.</p>}
-      <div className="grid gap-4 md:grid-cols-2">
-        {items.map((it) => (
-          <ReviewCard key={it.post.id} item={it} onChange={onChange} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ReviewCard({ item, onChange }: { item: ReviewItem; onChange: () => void }) {
-  const { post, insight } = item;
-  const [text, setText] = useState(post.text);
-  const [when, setWhen] = useState(() => toLocalInput(new Date(Date.now() + 60 * 60 * 1000)));
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const run = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setErr(null);
-    try {
-      await fn();
-      onChange();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <article className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white p-4">
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span>
-          {insight?.instrument.split(":").pop()} · {insight?.timeframe} · {insight?.kind}
-        </span>
-        <span>{post.template_id}</span>
-      </div>
-      <textarea
-        className="post-preview min-h-40 w-full rounded border border-zinc-200 bg-zinc-50 p-3 text-sm"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        dir="rtl"
-      />
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span>{text.length} / 280</span>
-        <span>{insight?.strategy}</span>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="text-xs text-zinc-500">موعد النشر</label>
-        <input
-          type="datetime-local"
-          className="rounded border border-zinc-300 px-2 py-1 text-sm"
-          value={when}
-          onChange={(e) => setWhen(e.target.value)}
-        />
-        <button
-          disabled={busy}
-          className="rounded bg-emerald-600 px-3 py-1 text-sm text-white disabled:opacity-50"
-          onClick={() =>
-            run(() =>
-              api.approve(post.id, {
-                scheduled_at: new Date(when).toISOString(),
-                text: text !== post.text ? text : null,
-              }),
-            )
-          }
-        >
-          اعتماد
-        </button>
-        <button
-          disabled={busy}
-          className="rounded border border-zinc-300 px-3 py-1 text-sm disabled:opacity-50"
-          onClick={() => run(() => api.reject(post.id, ""))}
-        >
-          رفض
-        </button>
-      </div>
-      {err && <div className="text-xs text-red-700">{err}</div>}
-    </article>
-  );
-}
-
-function CalendarSection({ calendar }: { calendar: Record<string, Post[]> }) {
-  const days = Object.keys(calendar);
-  return (
-    <section>
-      <h2 className="mb-3 text-lg font-semibold">التقويم</h2>
-      {days.length === 0 && <p className="text-sm text-zinc-500">لا منشورات معتمدة أو منشورة في هذه الفترة.</p>}
-      <div className="space-y-3">
-        {days.map((d) => (
-          <div key={d} className="rounded-lg border border-zinc-200 bg-white p-3">
-            <div className="mb-2 text-sm font-semibold tabular-nums">{d}</div>
-            <ul className="space-y-1 text-sm">
-              {calendar[d].map((p) => (
-                <li key={p.id} className="flex items-center gap-2">
-                  <span
-                    className={`rounded px-2 py-0.5 text-xs ${
-                      p.status === "published" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                    }`}
-                  >
-                    {STATUS_AR[p.status]}
-                  </span>
-                  <span className="text-zinc-500 tabular-nums">{fmt(p.published_at ?? p.scheduled_at)}</span>
-                  <span className="truncate">{p.text.split("\n")[0]}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function JobsSection({ jobs }: { jobs: JobRun[] }) {
-  return (
-    <section>
-      <h2 className="mb-3 text-lg font-semibold">حالة المهام</h2>
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-zinc-500">
-            <tr>
-              <th className="p-2 text-right">المهمة</th>
-              <th className="p-2 text-right">البداية</th>
-              <th className="p-2 text-right">الحالة</th>
-              <th className="p-2 text-right">التفاصيل</th>
-            </tr>
-          </thead>
-          <tbody>
-            {jobs.length === 0 && (
-              <tr>
-                <td className="p-2 text-zinc-500" colSpan={4}>
-                  لم تُشغَّل أي مهمة بعد.
-                </td>
-              </tr>
-            )}
-            {jobs.map((j) => (
-              <tr key={j.id} className="border-t border-zinc-100">
-                <td className="p-2">{j.job}</td>
-                <td className="p-2 tabular-nums">{fmt(j.started_at)}</td>
-                <td className="p-2">
-                  {j.ok === null ? "قيد التشغيل" : j.ok ? "نجحت" : "فشلت"}
-                </td>
-                <td className="p-2 font-mono text-xs text-zinc-600" dir="ltr">
-                  {j.detail.split("\n")[0].slice(0, 120)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
   );
 }

@@ -17,3 +17,12 @@ def test_schema_files_are_idempotent_sql():
         text = p.read_text().upper()
         assert "CREATE TABLE IF NOT EXISTS" in text, p
         assert "DROP " not in text, p
+
+
+def test_cors_origins_parse():
+    s = Settings(_env_file=None, cors_origins="https://a.example, https://b.example")
+    assert [o.strip() for o in s.cors_origins.split(",")] == [
+        "https://a.example",
+        "https://b.example",
+    ]
+    assert Settings(_env_file=None).lab_admin_token is None  # admin fails closed by default

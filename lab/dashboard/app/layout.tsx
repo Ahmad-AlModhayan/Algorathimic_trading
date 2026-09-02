@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "لوحة المحتوى",
-  description: "مراجعة المنشورات، التقويم، القمع، حالة المهام",
+  title: process.env.NEXT_PUBLIC_BRAND_NAME ?? "مختبر الاستراتيجيات",
+  description: "اكتب قاعدتك وشاهد نتيجتها الحقيقية على ثلاث سنوات من البيانات، بعد الرسوم.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

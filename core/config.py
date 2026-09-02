@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     x_access_secret: str | None = None
     x_bearer_token: str | None = None
 
+    # Lab API / landing / payments
+    lab_admin_token: str | None = Field(
+        default=None,
+        description="Bearer token for the admin dashboard API. Unset = admin endpoints refuse.",
+    )
+    brand_name: str = "مختبر الاستراتيجيات"
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        description="Comma-separated browser origins allowed to call the API.",
+    )
+    lemonsqueezy_signing_secret: str | None = None
+
     @property
     def content_state_path(self) -> Path:
         return self.data_dir / "content" / "state.json"
